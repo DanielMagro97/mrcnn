@@ -135,7 +135,7 @@ class SDetectorConfig(Config):
 	# Image mean (RGB)
 	#MEAN_PIXEL = np.array([112,112,112])
 	# Image mean (RGB) - consider setting these to zero, and do per image mean/std normalization
-	MEAN_PIXEL = np.array([0, 0, 0])
+	MEAN_PIXEL = np.array([0])
 
 	# Non-max suppression threshold to filter RPN proposals.
 	# You can increase this during training to generate more propsals.
@@ -168,6 +168,8 @@ class SDetectorConfig(Config):
 	# memory load. Recommended when using high-resolution images.
 	USE_MINI_MASK = False
 
+	# Set the number of image channels to 1
+	IMAGE_CHANNEL_COUNT = 1
 
 
 ############################################################
@@ -181,7 +183,7 @@ class SourceDataset(utils.Dataset):
 				dataset_dir: Root directory of the dataset.
 		"""
 		# Add classes. We have only one class to add
-		class_id_map= {
+		class_id_map = {
 			'bkg': 0,
 			'sidelobe': 1,
 			'source': 2,
@@ -194,24 +196,24 @@ class SourceDataset(utils.Dataset):
 		self.add_class("sources", 3, "galaxy_C1")
 		self.add_class("sources", 4, "galaxy_C2")
 		self.add_class("sources", 5, "galaxy_C3")
-		 
+
 
 		# Read dataset
-		with open(dataset,'r') as f:
+		with open(dataset, 'r') as f:
 		
 			for line in f:
 				line_split = line.strip().split(',')
 				(filename,filename_mask,class_name) = line_split
 
-				filename_base= os.path.basename(filename)
-				filename_base_noext= os.path.splitext(filename_base)[0]	
+				filename_base = os.path.basename(filename)
+				filename_base_noext = os.path.splitext(filename_base)[0]
 
-				class_id= 0
+				class_id = 0
 				if class_name in class_id_map:
-					class_id= class_id_map.get(class_name)					
+					class_id = class_id_map.get(class_name)
 
 				self.add_image(
-        	#class_name,
+					#class_name,
 					"sources",
 					image_id=filename_base_noext,  # use file name as a unique image id
 					path=filename,
@@ -219,26 +221,24 @@ class SourceDataset(utils.Dataset):
 					class_id=class_id
 				)
 
-
 	def load_gt_mask(self, image_id):
 		""" Load gt mask """
 
 		# Read filename
 		info = self.image_info[image_id]
-		filename= info["path_mask"]
-		class_id= info["class_id"]
+		filename = info["path_mask"]
+		class_id = info["class_id"]
 
 		# Read mask
-		data, header= utils.read_fits(filename,stretch=False,normalize=False,convertToRGB=False)
-		height= data.shape[0]
-		width= data.shape[1]
-		data= data.astype(np.bool)
+		data, header = utils.read_fits(filename, stretch=False, normalize=False, convertToRGB=False)
+		height = data.shape[0]
+		width = data.shape[1]
+		data = data.astype(np.bool)
 		
-		mask = np.zeros([height,width,1],dtype=np.bool)
-		mask[:,:,0]= data
+		mask = np.zeros([height, width, 1], dtype=np.bool)
+		mask[:, :, 0] = data
 	
 		return mask
-
 
 	def load_mask(self, image_id):
 		""" Generate instance masks for an image.
@@ -253,34 +253,35 @@ class SourceDataset(utils.Dataset):
 
 		# Set bitmap mask of shape [height, width, instance_count]
 		info = self.image_info[image_id]
-		filename= info["path_mask"]
-		class_id= info["class_id"]
+		filename = info["path_mask"]
+		class_id = info["class_id"]
 
 		# Read mask
-		data, header= utils.read_fits(filename,stretch=False,normalize=False,convertToRGB=False)
-		height= data.shape[0]
-		width= data.shape[1]
+		data, header = utils.read_fits(filename, stretch=False, normalize=False, convertToRGB=False)
+		height = data.shape[0]
+		width = data.shape[1]
 
-		data= data.astype(np.bool)
+		data = data.astype(np.bool)
 
-		mask = np.zeros([height,width,1],dtype=np.bool)
-		mask[:,:,0]= data
+		mask = np.zeros([height, width, 1], dtype=np.bool)
+		mask[:, :, 0] = data
 
-		instance_counts= np.full([mask.shape[-1]], class_id, dtype=np.int32)
+		instance_counts = np.full([mask.shape[-1]], class_id, dtype=np.int32)
 		
 		# Return mask, and array of class IDs of each instance
 		return mask, instance_counts
 
-
 	def load_image(self, image_id):
-		"""Load the specified image and return a [H,W,3] Numpy array."""
+		"""Load the specified image and return a [H, W, 1] Numpy array."""
 		
 		# Load image
-		filename= self.image_info[image_id]['path']
-		image, header= utils.read_fits(filename,stretch=True,normalize=True,convertToRGB=True)
+		filename = self.image_info[image_id]['path']
+		convertToRGB: bool = False
+		image, header = utils.read_fits(filename, stretch=True, normalize=True, convertToRGB=convertToRGB)
+		if not convertToRGB:
+			image = np.expand_dims(image, axis=2)
 				
 		return image
-
 
 	def image_reference(self, image_id):
 		""" Return the path of the image."""
@@ -322,14 +323,13 @@ def train(model,nepochs=10,nthreads=1):
 	# COCO trained weights, we don't need to train too long. Also,
 	# no need to train all layers, just the heads should do it.
 	print("INFO: Training network ...")
-	model.train(dataset_train, dataset_val,	
-		learning_rate=config.LEARNING_RATE,
-		epochs=nepochs,
-		augmentation=augmentation,
-		#layers='heads',
-		layers='all',
-		n_worker_threads=nthreads
-	)
+	model.train(dataset_train, dataset_val,
+				learning_rate=config.LEARNING_RATE,
+				epochs=nepochs,
+				augmentation=augmentation,
+				#layers='heads',
+				layers='all',
+				n_worker_threads=nthreads)
 
 
 def test(model):
@@ -346,11 +346,11 @@ def test(model):
 		image_path_base_noext= os.path.splitext(image_path_base)[0]		
 
 		# - Load mask
-		mask_gt= dataset.load_gt_mask(image_id)
+		mask_gt = dataset.load_gt_mask(image_id)
 
 		mask_gt_chan3= np.broadcast_to(mask_gt,image.shape)
 		image_masked_gt= np.copy(image)
-		image_masked_gt[np.where((mask_gt_chan3==[True,True,True]).all(axis=2))]=[255,255,0]
+		image_masked_gt[np.where((mask_gt_chan3 == [True,True,True]).all(axis=2))] = [255,255,0]
 
 		outfile = 'gtmask_' + image_path_base_noext + '.png'
 		skimage.io.imsave(outfile, image_masked_gt)
@@ -370,7 +370,7 @@ def test(model):
 			continue	
 		
 		# Save image with masks
-		outfile =  'out_' + image_path_base_noext + '.png'	
+		outfile = 'out_' + image_path_base_noext + '.png'
 		visualize.display_instances(
 			image, 
 			r['rois'], 
@@ -389,24 +389,24 @@ def test(model):
 #  Training
 ############################################################
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
 	import argparse
 
 	# Parse command line arguments
 	parser = argparse.ArgumentParser(description='Train Mask R-CNN to detect radio sources.')
 
-	parser.add_argument("command",metavar="<command>",help="'train' or 'splash'")
-	parser.add_argument('--dataset', required=False,metavar="/path/to/balloon/dataset/",help='Directory of the source dataset')
-	parser.add_argument('--weights', required=False,metavar="/path/to/weights.h5",help="Path to weights .h5 file or 'coco'")
-	parser.add_argument('--logs', required=False,default=DEFAULT_LOGS_DIR,metavar="/path/to/logs/",help='Logs and checkpoints directory (default=logs/)')
-	parser.add_argument('--image', required=False,metavar="path or URL to image",help='Image to apply the color splash effect on')
-	parser.add_argument('--nepochs', required=False,default=10,type=int,metavar="Number of training epochs",help='Number of training epochs')
-	parser.add_argument('--epoch_length', required=False,default=10,type=int,metavar="Number of data batches per epoch",help='Number of data batches per epoch')
-	parser.add_argument('--nvalidation_steps', required=False,default=50,type=int,metavar="Number of validation steps per epoch",help='Number of validation steps per epoch')
-	parser.add_argument('--ngpu', required=False,default=1,type=int,metavar="Number of GPUs",help='Number of GPUs')
-	parser.add_argument('--nimg_per_gpu', required=False,default=1,type=int,metavar="Number of images per gpu",help='Number of images per gpu')
-	parser.add_argument('--weighttype', required=False,default='',metavar="Type of weights",help="Type of weights")
-	parser.add_argument('--nthreads', required=False,default=1,type=int,metavar="Number of worker threads",help="Number of worker threads")
+	parser.add_argument("command", metavar="<command>", help="'train' or 'splash'")
+	parser.add_argument('--dataset', required=False, metavar="/path/to/balloon/dataset/", help='Directory of the source dataset')
+	parser.add_argument('--weights', required=False, metavar="/path/to/weights.h5", help="Path to weights .h5 file or 'coco'")
+	parser.add_argument('--logs', required=False, default=DEFAULT_LOGS_DIR, metavar="/path/to/logs/", help='Logs and checkpoints directory (default=logs/)')
+	parser.add_argument('--image', required=False, metavar="path or URL to image", help='Image to apply the color splash effect on')
+	parser.add_argument('--nepochs', required=False, default=10, type=int, metavar="Number of training epochs", help='Number of training epochs')
+	parser.add_argument('--epoch_length', required=False, default=10, type=int, metavar="Number of data batches per epoch", help='Number of data batches per epoch')
+	parser.add_argument('--nvalidation_steps', required=False, default=50, type=int, metavar="Number of validation steps per epoch",help='Number of validation steps per epoch')
+	parser.add_argument('--ngpu', required=False, default=1, type=int, metavar="Number of GPUs", help='Number of GPUs')
+	parser.add_argument('--nimg_per_gpu', required=False, default=1, type=int, metavar="Number of images per gpu", help='Number of images per gpu')
+	parser.add_argument('--weighttype', required=False, default='', metavar="Type of weights", help="Type of weights")
+	parser.add_argument('--nthreads', required=False, default=1, type=int, metavar="Number of worker threads", help="Number of worker threads")
 	
 	args = parser.parse_args()
 
@@ -421,17 +421,17 @@ if __name__ == '__main__':
 	print("Weights: ", args.weights)
 	print("Dataset: ", args.dataset)
 	print("Logs: ", args.logs)
-	print("nEpochs: ",args.nepochs)
-	print("epoch_length: ",args.epoch_length)
-	print("nvalidation_steps: ",args.nvalidation_steps)
-	print("ngpu: ",args.ngpu)
-	print("nimg_per_gpu: ",args.nimg_per_gpu)
+	print("nEpochs: ", args.nepochs)
+	print("epoch_length: ", args.epoch_length)
+	print("nvalidation_steps: ", args.nvalidation_steps)
+	print("ngpu: ", args.ngpu)
+	print("nimg_per_gpu: ", args.nimg_per_gpu)
 
 	weights_path = args.weights
 
-	train_from_scratch= False
-	if not weights_path or weights_path=='':
-		train_from_scratch= True
+	train_from_scratch = False
+	if not weights_path or weights_path == '':
+		train_from_scratch = True
 
 	# Configurations
 	if args.command == "train":
@@ -454,7 +454,7 @@ if __name__ == '__main__':
 
 	# Create model
 	if args.command == "train":
-		model = modellib.MaskRCNN(mode="training", config=config,model_dir=args.logs)
+		model = modellib.MaskRCNN(mode="training", config=config, model_dir=args.logs)
 	else:
 		# Device to load the neural network on.
 		# Useful if you're training a model on the same 
@@ -462,7 +462,7 @@ if __name__ == '__main__':
 		# GPU for training.
 		DEVICE = "/cpu:0"  # /cpu:0 or /gpu:0
 		with tf.device(DEVICE):
-			model = modellib.MaskRCNN(mode="inference", config=config,model_dir=args.logs)
+			model = modellib.MaskRCNN(mode="inference", config=config, model_dir=args.logs)
 
 	# Load weights
 	if not train_from_scratch:	
@@ -473,6 +473,7 @@ if __name__ == '__main__':
 			model.load_weights(
 				weights_path, by_name=True, 
 				exclude=[
+					"conv1",
 					"mrcnn_class_logits", "mrcnn_bbox_fc",
 					"mrcnn_bbox", "mrcnn_mask"
 				]
@@ -482,12 +483,9 @@ if __name__ == '__main__':
 
 	# Train or evaluate
 	if args.command == "train":
-		train(model,args.nepochs,args.nthreads)
+		train(model, args.nepochs, args.nthreads)
 	elif args.command == "test":
 		test(model)	
 	else:
 		print("'{}' is not recognized. "
-			"Use 'train' or 'test'".format(args.command))
-
-
-
+			  "Use 'train' or 'test'".format(args.command))

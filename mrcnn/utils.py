@@ -984,63 +984,63 @@ def read_table(filename):
     t= ascii.read(filename)
     return t
 
-def read_fits(filename,stretch=True,normalize=True,convertToRGB=True):
+def read_fits(filename, stretch=True, normalize=True, convertToRGB=True):
     """ Read FITS image """
 	
     # - Open file
     try:
-        hdu= fits.open(filename,memmap=False)
+        hdu = fits.open(filename, memmap=False)
     except Exception as ex:
-        errmsg= 'ERROR: Cannot read image file: ' + filename
+        errmsg = 'ERROR: Cannot read image file: ' + filename
         print(errmsg)
         return None
 
     # - Read data
-    data= hdu[0].data
-    data_size= np.shape(data)
-    nchan= len(data.shape)
-    if nchan==4:
-      output_data= data[0,0,:,:]
-    elif nchan==2:
-      output_data= data	
+    data = hdu[0].data
+    data_size = np.shape(data)
+    nchan = len(data.shape)
+    if nchan == 4:
+      output_data = data[0, 0, :, :]
+    elif nchan == 2:
+      output_data = data
     else:
-      errmsg= 'ERROR: Invalid/unsupported number of channels found in file ' + filename + ' (nchan=' + str(nchan) + ')!'
+      errmsg = 'ERROR: Invalid/unsupported number of channels found in file ' + filename + ' (nchan=' + str(nchan) + ')!'
       hdu.close()
       print(errmsg)
       return None
 
     # - Convert data to float 32
-    output_data= output_data.astype(np.float32)
+    output_data = output_data.astype(np.float32)
 
     # - Read metadata
-    header= hdu[0].header
+    header = hdu[0].header
 
     # - Close file
     hdu.close()
 
     # - Replace nan values with min pix value
-    img_min= np.nanmin(output_data)
-    output_data[np.isnan(output_data)]= img_min	
+    img_min = np.nanmin(output_data)
+    output_data[np.isnan(output_data)] = img_min
 
     # - Stretch data using zscale transform
     if stretch:
-        data_stretched= stretch_img(output_data)
-        output_data= data_stretched
-        output_data= output_data.astype(np.float32)
+        data_stretched = stretch_img(output_data)
+        output_data = data_stretched
+        output_data = output_data.astype(np.float32)
 
     # - Normalize data to [0,255]
     if normalize:
-        data_norm= normalize_img(output_data)
-        output_data= data_norm
-        output_data= output_data.astype(np.float32)
+        data_norm = normalize_img(output_data)
+        output_data = data_norm
+        output_data = output_data.astype(np.float32)
 
     # - Convert to RGB image
     if convertToRGB:
         if not normalize:
-            data_norm= normalize_img(output_data)
-            output_data= data_norm
-        data_rgb= gray2rgb(output_data) 
-        output_data= data_rgb
+            data_norm = normalize_img(output_data)
+            output_data = data_norm
+        data_rgb = gray2rgb(output_data)
+        output_data = data_rgb
 
     return output_data, header
 	
@@ -1048,16 +1048,16 @@ def read_fits(filename,stretch=True,normalize=True,convertToRGB=True):
 def stretch_img(data,contrast=0.25):
     """ Apply z-scale stretch to image """
 		
-    transform= ZScaleInterval(contrast=contrast)
-    data_stretched= transform(data)
+    transform = ZScaleInterval(contrast=contrast)
+    data_stretched = transform(data)
 	
     return data_stretched
 
 def normalize_img(data):
     """ Normalize image to (0,1) """
 	
-    data_max= np.max(data)
-    data_norm= data/data_max
+    data_max = np.max(data)
+    data_norm = data/data_max
 
     return data_norm
 
