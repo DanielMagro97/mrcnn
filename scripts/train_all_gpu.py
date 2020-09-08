@@ -65,11 +65,11 @@ DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 
 class SDetectorConfig(Config):
-    
+
 	""" Configuration for training on the toy  dataset.
 			Derives from the base Config class and overrides some values.
 	"""
-	# Give the configuration a recognizable name	
+	# Give the configuration a recognizable name
 	NAME = "sources"
 
 	# NUMBER OF GPUs to use. When using only a CPU, this needs to be set to 1.
@@ -101,8 +101,8 @@ class SDetectorConfig(Config):
 	# Maximum number of ground truth instances to use in one image
 	MAX_GT_INSTANCES = 300 # default=100
 
-	# Use a smaller backbone
-	BACKBONE = "resnet101"
+	# Use a smaller backbone - Accepted values are resnet50, resnet101, mobilenetv1 and mobilenetv2
+	BACKBONE = "mobilenetv2"
 
 	# The strides of each layer of the FPN Pyramid. These values
 	# are based on a Resnet101 backbone.
@@ -342,29 +342,29 @@ def test(model):
 		# - Load image
 		image = dataset.load_image(image_id)
 		image_path = dataset.image_info[index]['path']
-		image_path_base= os.path.basename(image_path)
-		image_path_base_noext= os.path.splitext(image_path_base)[0]		
+		image_path_base = os.path.basename(image_path)
+		image_path_base_noext = os.path.splitext(image_path_base)[0]
 
 		# - Load mask
 		mask_gt = dataset.load_gt_mask(image_id)
 
-		mask_gt_chan3= np.broadcast_to(mask_gt,image.shape)
-		image_masked_gt= np.copy(image)
-		image_masked_gt[np.where((mask_gt_chan3 == [True,True,True]).all(axis=2))] = [255,255,0]
+		mask_gt_chan3 = np.broadcast_to(mask_gt,image.shape)
+		image_masked_gt = np.copy(image)
+		image_masked_gt[np.where((mask_gt_chan3 == [True, True, True]).all(axis=2))] = [255, 255, 0]
 
 		outfile = 'gtmask_' + image_path_base_noext + '.png'
 		skimage.io.imsave(outfile, image_masked_gt)
 
 		# - Extract true bounding box from true mask		
-		bboxes_gt= utils.extract_bboxes(mask_gt)
+		bboxes_gt = utils.extract_bboxes(mask_gt)
 
 		# Detect objects
 		r = model.detect([image], verbose=0)[0]
-		mask= r['masks']
-		bboxes= r['rois']
+		mask = r['masks']
+		bboxes = r['rois']
 		##bboxes= utils.extract_bboxes(mask)
-		class_labels= r['class_ids']
-		nobjects= mask.shape[-1]
+		class_labels = r['class_ids']
+		nobjects = mask.shape[-1]
 		if nobjects <= 0:
 			print("INFO: No object mask found for image %s ..." % image_path_base)
 			continue	
@@ -455,6 +455,7 @@ if __name__ == '__main__':
 	# Create model
 	if args.command == "train":
 		model = modellib.MaskRCNN(mode="training", config=config, model_dir=args.logs)
+		# model.keras_model.summary()
 	else:
 		# Device to load the neural network on.
 		# Useful if you're training a model on the same 
